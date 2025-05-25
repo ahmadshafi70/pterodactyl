@@ -1,0 +1,131 @@
+name: Test, Coverage & Quality
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    branches:
+      - "main"
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        php: [8.3]
+        database:
+          - mariadb:10.11
+          - mysql:9
+    services:
+      database:
+        image: ${{ matrix.database }}
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: testing
+          MYSQL_ROOT_PASSWORD: ""
+        ports:
+          - "3306:3306"
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+          --health-start-period=30s
+    steps:
+      - name: Code Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get cache directory
+        id: composer-cache
+        run: |
+          echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-${{ matrix.php }}-
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: bcmath, cli, curl, gd, mbstring, mysql, openssl, pdo, tokenizer, xml, zip
+          tools: composer:v2
+          coverage: xdebug
+          ini-values: xdebug.mode=coverage
+
+      - name: Setup .env
+        run: cp .env.ci .env
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --no-suggest --prefer-dist
+
+      - name: Create storage directories
+        run: |
+          mkdir -p storage/framework/{cache,sessions,views}
+          mkdir -p storage/logs
+          mkdir -p bootstrap/cache
+
+      - name: Set permissions
+        run: |
+          chmod -R 755 storage
+          chmod -R 755 bootstrap/cache
+
+      - name: Cache config
+        run: php artisan config:cache
+
+      - name: Wait for database
+        run: |
+          until mysqladmin ping -h 127.0.0.1 -P 3306 -u root --silent; do
+            echo "Waiting for database..."
+            sleep 2
+          done
+        timeout-minutes: 5
+
+      - name: Unit tests
+        run: vendor/bin/phpunit --bootstrap vendor/autoload.php tests/Unit
+        if: ${{ always() }}
+        env:
+          DB_HOST: UNIT_NO_DB
+
+#      - name: Run database migrations
+#        run: php artisan migrate --force
+#        env:
+#          DB_PORT: ${{ job.services.database.ports[3306] }}
+#          DB_USERNAME: root
+#
+#      - name: Run database seeder
+#        run: php artisan db:seed
+#        env:
+#          DB_PORT: ${{ job.services.database.ports[3306] }}
+#          DB_USERNAME: root
+
+      - name: Integration tests with coverage
+        run: vendor/bin/phpunit --coverage-clover=coverage.xml --log-junit=junit.xml tests/Integration
+        env:
+          DB_PORT: ${{ job.services.database.ports[3306] }}
+          DB_USERNAME: root
+
+      - name: Run SonarQube analysis
+        if: matrix.php == '8.2' && matrix.database == 'mysql:8'
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: Check quality gate
+        if: matrix.php == '8.2' && matrix.database == 'mysql:8'
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

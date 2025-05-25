@@ -1,0 +1,102 @@
+{
+    "_comment": "DO NOT EDIT: FILE GENERATED AUTOMATICALLY BY PTERODACTYL PANEL - PTERODACTYL.IO",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2024-10-17T20:36:37+02:00",
+    "name": "Server Importer",
+    "author": "egg@serverimporter.tld",
+    "description": "Internal Egg for use with the server importer, do not use this on any server, it will automatically be added\/removed.",
+    "features": null,
+    "docker_images": {
+        "Alpine": "ghcr.io\/pterodactyl\/yolks:alpine"
+    },
+    "file_denylist": [],
+    "startup": "echo \"Do not use the import egg on a server manually, if this was not intentional please contact support.\"",
+    "config": {
+        "files": "{}",
+        "startup": "{}",
+        "logs": "{}",
+        "stop": "^^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!\/bin\/bash\r\n\r\nmkdir -p \/mnt\/server\r\ncd \/mnt\/server\r\n\r\n# Install required dependencies\r\napt-get update\r\napt-get install -y lftp\r\n\r\n# Basic Script that imports from an sftp\/ftp server\r\nMODE=$IMPORT_MODE # sftp or ftp\r\nHOST=$IMPORT_HOST\r\nPORT=${IMPORT_PORT:-22} # Default to port 22 if not set\r\nUSER=$IMPORT_USERNAME\r\nPASSWORD=$IMPORT_PASSWORD\r\nFROM_DIR=$IMPORT_FROM_PATH\r\nTO_DIR=$IMPORT_TO_PATH\r\n\r\nrecursive_mkdir() {\r\n\tlocal dir=$1\r\n\tif [ -d \"$dir\" ]; then\r\n\t\techo \"Directory $dir already exists.\"\r\n\telse\r\n\t\trecursive_mkdir \"$(dirname \"$dir\")\"\r\n\t\techo \"Creating directory $dir...\"\r\n\t\tmkdir \"$dir\"\r\n\tfi\r\n}\r\n\r\n# Function for recursive SFTP transfer using lftp\r\ntransfer_sftp() {\r\n\techo \"Starting SFTP recursive transfer from $FROM_DIR to $TO_DIR...\"\r\n\r\n\t# Create the target directory if it doesn't exist\r\n\trecursive_mkdir $TO_DIR\r\n\tcd $TO_DIR\r\n\r\n\tlftp -u \"$USER,$PASSWORD\" -p \"$PORT\" -e \"set sftp:connect-program 'ssh -o StrictHostKeyChecking=no'; mirror --verbose -c --parallel=10 $FROM_DIR; bye\" sftp:\/\/$HOST\r\n\r\n\tif [ \"$FROM_DIR\" != \".\/\" ]; then\r\n\t\tmv $FROM_DIR\/* .\r\n\t\tmv $FROM_DIR\/.* .\r\n\t\trm -rf $FROM_DIR\r\n\tfi\r\n}\r\n\r\n# Function for FTP transfer\r\ntransfer_ftp() {\r\n\techo \"Starting FTP transfer from $FROM_DIR to $TO_DIR...\"\r\n\r\n\t# Create the target directory if it doesn't exist\r\n\trecursive_mkdir $TO_DIR\r\n\tcd $TO_DIR\r\n\r\n\tlftp -u \"$USER,$PASSWORD\" -e \"mirror --verbose -c --parallel=4 $FROM_DIR; bye\" ftp:\/\/$HOST:$PORT\r\n\r\n\tif [ \"$FROM_DIR\" != \".\/\" ]; then\r\n\t\tmv $FROM_DIR\/* .\r\n\t\tmv $FROM_DIR\/.* .\r\n\t\trm -rf $FROM_DIR\r\n\tfi\r\n}\r\n\r\n# Perform the transfer based on the mode\r\ncase $MODE in\r\n\tsftp)\r\n\t\ttransfer_sftp\r\n\t\t;;\r\n\tftp)\r\n\t\ttransfer_ftp\r\n\t\t;;\r\n\t*)\r\n\t\techo \"Error: Unsupported mode '$MODE'. Use 'sftp' or 'ftp'.\"\r\n\t\texit 1\r\n\t\t;;\r\nesac\r\n\r\necho \"Transfer complete.\"",
+            "container": "ghcr.io\/pterodactyl\/installers:debian",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Mode",
+            "description": "",
+            "env_variable": "IMPORT_MODE",
+            "default_value": "ftp",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": "required|string|in:ftp,sftp",
+            "field_type": "text"
+        },
+        {
+            "name": "Host",
+            "description": "",
+            "env_variable": "IMPORT_HOST",
+            "default_value": "127.0.0.1",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": "required|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Port",
+            "description": "",
+            "env_variable": "IMPORT_PORT",
+            "default_value": "22",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": "required|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Username",
+            "description": "",
+            "env_variable": "IMPORT_USERNAME",
+            "default_value": "root",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": "required|string",
+            "field_type": "text"
+        },
+        {
+            "name": "Password",
+            "description": "",
+            "env_variable": "IMPORT_PASSWORD",
+            "default_value": "123",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": "required|string",
+            "field_type": "text"
+        },
+        {
+            "name": "From",
+            "description": "",
+            "env_variable": "IMPORT_FROM_PATH",
+            "default_value": "\/",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": "required|string",
+            "field_type": "text"
+        },
+        {
+            "name": "To Path",
+            "description": "",
+            "env_variable": "IMPORT_TO_PATH",
+            "default_value": "\/",
+            "user_viewable": false,
+            "user_editable": false,
+            "rules": "required|string",
+            "field_type": "text"
+        }
+    ]
+}

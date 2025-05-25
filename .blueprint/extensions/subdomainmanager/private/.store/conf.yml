@@ -1,0 +1,35 @@
+info:
+  name: "Subdomain Manager"
+  identifier: "subdomainmanager"
+  description: "Allow creating Subdomains in the Dashboard using predefined domains easily with an intuitive UI."
+  flags: "hasInstallScript,hasRemovalScript"
+  version: "1.0.2"
+  target: "beta-2024-12"
+  author: "0x7d8"
+  icon: "subdomainmanager_icon.jpg"
+
+admin:
+  view: "admin.blade.php"
+  controller: "controller.php"
+  css: ""
+  wrapper: ""
+
+dashboard:
+  css: ""
+  wrapper: ""
+  components: "components"
+
+data:
+  public: "public"
+  directory: "data"
+
+requests:
+  views: ""
+  controllers: "controllers"
+  routers:
+    application: ""
+    client: "router/client.php"
+    web: ""
+
+database:
+  migrations: "migrations"
